@@ -10,72 +10,72 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-    CheckOrigin: func(r *http.Request) bool { return true }, // すべてのオリジンを許可
+    CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-var waitingPlayer *Client // 待機中のプレイヤー
-var waitingPlayerLock sync.Mutex // 待機中のプレイヤーを保護するためのロック
+var waitingPlayer *Client
+var waitingPlayerLock sync.Mutex
 
-// クライアントを表す構造体
 type Client struct {
     conn *websocket.Conn
     game *GameSession
 }
 
-// ゲームセッションを表す構造体
 type GameSession struct {
-    clients []*Client
+    clients   []*Client
+    sentences []string
+    current   int
+    scores    [2]int
+	position  [2]int
 }
 
-// 新しいゲームセッションを作成
 func NewGameSession() *GameSession {
     return &GameSession{
-        clients: make([]*Client, 0, 2), // 2人プレイヤーのゲームを想定
+        clients: make([]*Client, 0, 2),
+        sentences: []string{"example", "typing", "game"}, // ここにタイピング問題を設定
+        current:   0,
     }
 }
 
-// ゲームセッションにクライアントを追加
 func (game *GameSession) join(client *Client) {
     game.clients = append(game.clients, client)
     client.game = game
     if len(game.clients) == 2 {
-        // ゲームスタートの処理
         game.start()
     }
 }
 
-// ゲームの開始処理
 func (game *GameSession) start() {
-    for _, client := range game.clients {
-        // すべてのクライアントにゲーム開始のメッセージを送信
-        go handleGameSession(client)
-    }
+    game.broadcastSentence()
+	for _, client := range game.clients {
+		go handleGameSession(client)
+	}
 }
 
-func handleGameSession(client *Client) {
-    defer client.conn.Close()
-    for {
-        _, msg, err := client.conn.ReadMessage()
+func (game *GameSession) broadcastSentence() {
+    sentence := game.sentences[game.current]
+    for _, client := range game.clients {
+        err := client.conn.WriteJSON(map[string]string{"sentence": sentence})
         if err != nil {
-            log.Println("Error reading message:", err)
-            return
+            log.Printf("Error sending sentence: %v", err)
         }
-        fmt.Printf("Received: %s", string(msg))
-        // ゲーム進行のロジック (メッセージに基づいた処理)
-		client.game.broadcastMessage(client, msg)
     }
 }
 
-// ゲームセッション内の他のすべてのクライアントにメッセージを送信
-func (game *GameSession) broadcastMessage(sender *Client, msg []byte) {
+func (game *GameSession) moveToNextSentence() {
+    game.current++
+    if game.current >= len(game.sentences) {
+        game.broadcastResult()
+        return
+    }
+    game.broadcastSentence()
+}
+
+func (game *GameSession) broadcastResult() {
     for _, client := range game.clients {
-        // 送信者以外にメッセージを送信
-        if client != sender {
-            err := client.conn.WriteMessage(websocket.TextMessage, msg)
-            if err != nil {
-                log.Printf("Error sending message: %v", err)
-                continue
-            }
+        err := client.conn.WriteJSON(map[string]int{"score1": game.scores[0], "score2": game.scores[1]})
+        if err != nil {
+            log.Printf("Error sending result: %v", err)
         }
     }
 }
@@ -86,28 +86,65 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
         log.Fatal("Error upgrading to WebSocket:", err)
     }
 
-    currentClient := &Client{conn: conn}
+    client := &Client{conn: conn}
 
     waitingPlayerLock.Lock()
     if waitingPlayer == nil {
-        // まだ待機中のプレイヤーがいなければ、現在のプレイヤーを待機させる
-        waitingPlayer = currentClient
+        waitingPlayer = client
         waitingPlayerLock.Unlock()
-        return // このプレイヤーは次のプレイヤーを待つ
+        return
     }
 
-    // 2人目のプレイヤーが見つかったのでゲームセッションを開始
     gameSession := NewGameSession()
     gameSession.join(waitingPlayer)
-    gameSession.join(currentClient)
-    waitingPlayer = nil // 待機プレイヤーをリセット
+    gameSession.join(client)
+    waitingPlayer = nil
     waitingPlayerLock.Unlock()
 }
 
-func main() {
-    http.HandleFunc("/", handleConnections)
-    fmt.Println("Server is running on port 8080...")
-    if err := http.ListenAndServe(":8080", nil); err != nil {
-        log.Fatal("Error starting server:", err)
+func handleGameSession(client *Client) {
+    defer client.conn.Close()
+    clientIndex := 0
+    if client == client.game.clients[1] {
+        clientIndex = 1
     }
+    for {
+        _, msg, err := client.conn.ReadMessage()
+        if err != nil {
+            log.Println("Error reading message:", err)
+            break
+        }
+        messageText := string(msg)
+
+		expectedChar := string(client.game.sentences[client.game.current][client.game.position[clientIndex]])
+        if messageText == expectedChar {
+            // 正しい文字の場合、位置を更新
+            client.game.position[clientIndex]++
+			client.sendMessage("ok")
+            // タイプする文字がなくなったら次のセンテンスへ
+            if client.game.position[clientIndex] == len(client.game.sentences[client.game.current]) {
+                client.game.moveToNextSentence()
+                // すべてのプレイヤーの位置をリセット
+                client.game.position = [2]int{0, 0}
+            }
+        } else {
+            // 誤った文字をタイプした場合の処理
+			client.sendMessage("fault")
+        }
+    }
+}
+
+func (c *Client) sendMessage(message string) {
+	err := c.conn.WriteMessage(websocket.TextMessage, []byte(message))
+	if err != nil {
+		log.Printf("Error in sending message: %v", err)
+	}
+}
+
+func main() {
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        handleConnections(w, r)
+    })
+    fmt.Println("Server is running on port 8080...")
+    log.Fatal(http.ListenAndServe(":8080", nil))
 }
