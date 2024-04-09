@@ -1,7 +1,6 @@
-package main
+package server
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -80,7 +79,7 @@ func (game *GameSession) broadcastResult() {
 	}
 }
 
-func handleConnections(w http.ResponseWriter, r *http.Request) {
+func HandleConnections(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Fatal("Error upgrading to WebSocket:", err)
@@ -140,12 +139,4 @@ func (c *Client) sendMessage(message string) {
 	if err != nil {
 		log.Printf("Error in sending message: %v", err)
 	}
-}
-
-func main() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		handleConnections(w, r)
-	})
-	fmt.Println("Server is running on port 8080...")
-	log.Fatal(http.ListenAndServe(":8080", nil))
 }
