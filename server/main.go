@@ -123,6 +123,7 @@ func handleGameSession(client *Client) {
 			client.sendMessage("ok")
             // タイプする文字がなくなったら次のセンテンスへ
             if client.game.position[clientIndex] == len(client.game.sentences[client.game.current]) {
+				client.game.scores[clientIndex]++
                 client.game.moveToNextSentence()
                 // すべてのプレイヤーの位置をリセット
                 client.game.position = [2]int{0, 0}
