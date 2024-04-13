@@ -120,6 +120,14 @@ func handleGameSession(client *Client) {
 			// 正しい文字の場合、位置を更新
 			client.game.position[clientIndex]++
 			client.sendMessage("ok")
+			// 自分の位置を更新したら相手に自分がどこまで進んだかを通
+			err := client.game.clients[1-clientIndex].conn.WriteJSON(map[string]interface{}{
+				"opponent_input": string(messageText),
+				"position":       client.game.position[clientIndex],
+			})
+			if err != nil {
+				log.Printf("Error sending position: %v", err)
+			}
 			// タイプする文字がなくなったら次のセンテンスへ
 			if client.game.position[clientIndex] == len(client.game.sentences[client.game.current]) {
 				client.game.scores[clientIndex]++
