@@ -6,7 +6,7 @@
 ```bash
 make up
 ```
-サーバー終了
+終了
 ```bash
 make down
 ```
