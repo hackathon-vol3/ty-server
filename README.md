@@ -2,10 +2,55 @@
 
 オンライン対戦タイピングゲーム
 
-以下でサーバーを立ち上げる
+以下でサーバー、データベースを立ち上げる
 ```bash
-docker compose up
+make up
 ```
+サーバー終了
+```bash
+make down
+```
+
+## 認証
+ユーザー認証は、セッションベース認証で行う
+### エンドポイント
+リクエストボディは以下のようなJSON形式を想定
+```json
+{
+    "name": "masa",
+    "password": "passw0rd"
+}
+```
+- ユーザー登録
+    - **POST:localhost:8080/signup**
+    - レスポンス
+        - OKの場合
+            - `User created!`
+            - StatusCode: 200
+        - リクエストが不正な場合
+            - `Invalid request body`
+            - StatusCode: 400
+        - ユーザーがすでに存在する場合
+            - `User already exists`
+            - StatusCode: 409
+        - それ以外のエラー
+            - StatusCode: 500
+- ログイン
+    - **POST:localhost:8080/login**
+    - レスポンス
+        - OKの場合
+            - `Logged in!`
+            - StatusCode: 200
+        - リクエストが不正な場合
+            - `Invalid request body`
+            - StatusCode: 400
+        - ユーザー名、またはパスワードが間違っている場合
+            - `Invalid login credentials`
+            - StatusCode: 401
+        - それ以外のエラー
+            - StatusCode: 500
+
+
 
 ## 処理の流れ
 - WebSocketで接続
