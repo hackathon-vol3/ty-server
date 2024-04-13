@@ -5,12 +5,15 @@ import (
 	"log"
 	"net/http"
 	"ty-server/internal/server"
+
+	"github.com/gorilla/mux"
 )
 
 func main() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		server.HandleConnections(w, r)
-	})
+	r := mux.NewRouter()
+	r.HandleFunc("/", server.HandleConnections)
+	r.HandleFunc("/signup", server.SignupPage)
+	r.HandleFunc("/login", server.LoginPage)
 	fmt.Println("Server is running on port 8080...")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":8080", r))
 }
