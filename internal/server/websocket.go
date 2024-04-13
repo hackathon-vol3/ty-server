@@ -1,9 +1,11 @@
 package server
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
+	"ty-server/internal/database"
 
 	"github.com/gorilla/websocket"
 )
@@ -18,6 +20,7 @@ var waitingPlayerLock sync.Mutex
 type Client struct {
 	conn *websocket.Conn
 	game *GameSession
+	name string
 }
 
 type GameSession struct {
@@ -64,6 +67,9 @@ func (game *GameSession) broadcastSentence() {
 func (game *GameSession) moveToNextSentence() {
 	game.current++
 	if game.current >= len(game.sentences) {
+		if game.scores[0] > game.scores[1] {
+			game.updateRate(0)
+		}
 		game.broadcastScore()
 		return
 	}
@@ -76,7 +82,21 @@ func (game *GameSession) broadcastScore() {
 		if err != nil {
 			log.Printf("Error sending result: %v", err)
 		}
+		game.viewMyRate(client)
 	}
+}
+
+func (game *GameSession) viewMyRate(client *Client) {
+	db := database.ConnectDB()
+	defer db.Close()
+
+	var rate int
+	err := db.QueryRow("SELECT rate FROM users WHERE name = ?", client.name).Scan(&rate)
+	if err != nil {
+		log.Printf("Error getting rate: %v", err)
+	}
+
+	client.sendMessage(fmt.Sprintf("Your rate: %d", rate))
 }
 
 func HandleConnections(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +105,13 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 		log.Fatal("Error upgrading to WebSocket:", err)
 	}
 
-	client := &Client{conn: conn}
+	name, err := getNameFromRequest(r)
+	if err != nil {
+		log.Printf("failed to get name from request: %v", err)
+		return
+	}
+
+	client := &Client{conn: conn, name: name}
 
 	waitingPlayerLock.Lock()
 	if waitingPlayer == nil {
@@ -139,4 +165,51 @@ func (c *Client) sendMessage(message string) {
 	if err != nil {
 		log.Printf("Error in sending message: %v", err)
 	}
+}
+
+func (game *GameSession) updateRate(winnerIndex int) {
+	for i, client := range game.clients {
+		if i == winnerIndex {
+			// 勝った場合
+			client.updateDbRate(10)
+		} else {
+			// 負けた場合
+			client.updateDbRate(-10)
+		}
+	}
+}
+
+func (c *Client) updateDbRate(rate int) {
+	db := database.ConnectDB()
+	defer db.Close()
+
+	_, err := db.Exec("UPDATE users SET rate = rate + ? WHERE name = ?", rate, c.name)
+	if err != nil {
+		log.Printf("Error updating rate: %v", err)
+	}
+
+	log.Printf("Updated rate for user %v", c.name)
+}
+
+func getNameFromRequest(r *http.Request) (string, error) {
+    // セッションクッキーを取得
+    cookie, err := r.Cookie("session")
+    if err != nil {
+        return "", fmt.Errorf("failed to get session cookie: %w", err)
+    }
+
+    // クッキーをデコード
+    value := make(map[string]string)
+    err = cookieHandler.Decode("session", cookie.Value, &value)
+    if err != nil {
+        return "", fmt.Errorf("failed to decode session cookie: %w", err)
+    }
+
+    // ユーザー名を取得
+    name, ok := value["name"]
+    if !ok {
+        return "", fmt.Errorf("no name in session cookie")
+    }
+
+    return name, nil
 }
