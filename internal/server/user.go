@@ -109,7 +109,7 @@ func SetSession(userName string, res http.ResponseWriter) {
 			Name:   "session",
 			Value:  encoded,
 			Path:   "/",
-			MaxAge: 30,
+			MaxAge: 3600,
 		}
 		http.SetCookie(res, cookie)
 	}
