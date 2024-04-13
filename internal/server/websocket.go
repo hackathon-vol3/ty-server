@@ -96,7 +96,11 @@ func (game *GameSession) viewMyRate(client *Client) {
 		log.Printf("Error getting rate: %v", err)
 	}
 
-	client.sendMessage(fmt.Sprintf("Your rate: %d", rate))
+	rateJSON := map[string]int{"rate": rate}
+	err = client.conn.WriteJSON(rateJSON)
+	if err != nil {
+		log.Printf("Error sending rate: %v", err)
+	}
 }
 
 func HandleConnections(w http.ResponseWriter, r *http.Request) {
