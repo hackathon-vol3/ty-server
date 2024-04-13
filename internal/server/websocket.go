@@ -71,6 +71,7 @@ func (game *GameSession) moveToNextSentence() {
 			game.updateRate(0)
 		}
 		game.broadcastScore()
+		game.viewMyRate(game.clients[0])
 		return
 	}
 	game.broadcastSentence()
@@ -82,7 +83,6 @@ func (game *GameSession) broadcastScore() {
 		if err != nil {
 			log.Printf("Error sending result: %v", err)
 		}
-		game.viewMyRate(client)
 	}
 }
 
@@ -150,12 +150,21 @@ func handleGameSession(client *Client) {
 			// 正しい文字の場合、位置を更新
 			client.game.position[clientIndex]++
 			client.sendMessage("ok")
+			// 対戦相手にどこまで入力できているかを送信
+			// 例えば、exampleのaまで入力できている場合、{"progress": exa}を送信
+			progress := client.game.sentences[client.game.current][:client.game.position[clientIndex]]
+			err := client.game.clients[1-clientIndex].conn.WriteJSON(map[string]string{"opponent_progress": progress})
+			if err != nil {
+				log.Printf("Error sending progress: %v", err)
+			}
 			// タイプする文字がなくなったら次のセンテンスへ
 			if client.game.position[clientIndex] == len(client.game.sentences[client.game.current]) {
 				client.game.scores[clientIndex]++
 				client.game.moveToNextSentence()
 				// すべてのプレイヤーの位置をリセット
 				client.game.position = [2]int{0, 0}
+				// 現在のスコアを送信
+				client.game.broadcastScore()
 			}
 		} else {
 			// 誤った文字をタイプした場合の処理
