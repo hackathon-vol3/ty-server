@@ -64,13 +64,13 @@ func (game *GameSession) broadcastSentence() {
 func (game *GameSession) moveToNextSentence() {
 	game.current++
 	if game.current >= len(game.sentences) {
-		game.broadcastResult()
+		game.broadcastScore()
 		return
 	}
 	game.broadcastSentence()
 }
 
-func (game *GameSession) broadcastResult() {
+func (game *GameSession) broadcastScore() {
 	for _, client := range game.clients {
 		err := client.conn.WriteJSON(map[string]int{"score1": game.scores[0], "score2": game.scores[1]})
 		if err != nil {
