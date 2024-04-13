@@ -196,24 +196,24 @@ func (c *Client) updateDbRate(rate int) {
 }
 
 func getNameFromRequest(r *http.Request) (string, error) {
-    // セッションクッキーを取得
-    cookie, err := r.Cookie("session")
-    if err != nil {
-        return "", fmt.Errorf("failed to get session cookie: %w", err)
-    }
+	// セッションクッキーを取得
+	cookie, err := r.Cookie("session")
+	if err != nil {
+		return "", fmt.Errorf("failed to get session cookie: %w", err)
+	}
 
-    // クッキーをデコード
-    value := make(map[string]string)
-    err = cookieHandler.Decode("session", cookie.Value, &value)
-    if err != nil {
-        return "", fmt.Errorf("failed to decode session cookie: %w", err)
-    }
+	// クッキーをデコード
+	value := make(map[string]string)
+	err = cookieHandler.Decode("session", cookie.Value, &value)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode session cookie: %w", err)
+	}
 
-    // ユーザー名を取得
-    name, ok := value["name"]
-    if !ok {
-        return "", fmt.Errorf("no name in session cookie")
-    }
+	// ユーザー名を取得
+	name, ok := value["name"]
+	if !ok {
+		return "", fmt.Errorf("no name in session cookie")
+	}
 
-    return name, nil
+	return name, nil
 }
