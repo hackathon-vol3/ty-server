@@ -9,6 +9,8 @@ services:
     volumes:
       - .:/app
     command: /main
+    depends_on:
+      - db
   db:
     image: mysql:latest
     environment:
