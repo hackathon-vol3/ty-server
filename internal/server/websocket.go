@@ -40,7 +40,7 @@ func NewGameSession() *GameSession {
 }
 
 func (game *GameSession) join(client *Client) {
-	game.clients = append(game.clients, client)
+	log.Printf("Client %v joined the game", client.name)
 	client.game = game
 	if len(game.clients) == 2 {
 		game.start()
@@ -120,6 +120,7 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 	waitingPlayerLock.Lock()
 	if waitingPlayer == nil {
 		waitingPlayer = client
+		log.Printf("Client %v is now waiting", client.name)
 		waitingPlayerLock.Unlock()
 		return
 	}
